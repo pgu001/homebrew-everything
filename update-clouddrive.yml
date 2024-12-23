@@ -1,0 +1,73 @@
+name: Update {REPLACE_WITH_APP_NAME} Formula
+
+on:
+  schedule:
+    - cron: '{REPLACE_WITH_CRON_SCHEDULE}'  # e.g. '0 */12 * * *' for every 12 hours
+  workflow_dispatch:   # Allow manual trigger
+
+jobs:
+  update-formula:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout Homebrew Tap repository
+        uses: actions/checkout@v2
+        with:
+          ref: main
+
+      - name: Get latest release version and update formula
+        run: |
+          echo "Before update:"
+          cat Formula/application.rb
+          
+          # Get latest version
+          VERSION=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/{REPLACE_WITH_GITHUB_OWNER}/{REPLACE_WITH_GITHUB_REPO}/releases | \
+            jq -r '.[0].tag_name' | sed 's/^v//')
+
+          # Verify VERSION
+          if [ -z "$VERSION" ] || [ "$VERSION" == "null" ]; then
+              echo "Error: Unable to fetch the latest version or received 'null'. Exiting..."
+              exit 1
+          fi
+          echo "Latest version: $VERSION"
+
+          # Construct download URLs
+          # Note: Customize these URL patterns according to your release asset naming convention
+          URL_X86="{REPLACE_WITH_X86_URL_PATTERN/v$VERSION/your-pattern-$VERSION.tgz}"
+          URL_AARCH64="{REPLACE_WITH_ARM64_URL_PATTERN/v$VERSION/your-pattern-$VERSION.tgz}"
+
+          # Calculate SHA256 checksums
+          SHA256_X86=$(curl -sL $URL_X86 | shasum -a 256 | cut -d ' ' -f1)
+          SHA256_AARCH64=$(curl -sL $URL_AARCH64 | shasum -a 256 | cut -d ' ' -f1)
+
+          echo "SHA256 for x86_64: $SHA256_X86"
+          echo "SHA256 for aarch64: $SHA256_AARCH64"
+
+          # Update Formula file
+          echo "Formula file path: $(pwd)/Formula/application.rb"
+          
+          # Update version, URLs and checksums
+          # Note: Customize these sed patterns according to your formula structure
+          sed -i "" "s|version \".*\"|version \"$VERSION\"|" Formula/application.rb
+          sed -i "" "s|url \".*x86_64.*\"|url \"$URL_X86\"|" Formula/application.rb
+          sed -i "" "s|url \".*aarch64.*\"|url \"$URL_AARCH64\"|" Formula/application.rb
+          sed -i "" "s|sha256 \".*x86_64.*\"|sha256 \"$SHA256_X86\"|" Formula/application.rb
+          sed -i "" "s|sha256 \".*aarch64.*\"|sha256 \"$SHA256_AARCH64\"|" Formula/application.rb
+
+          echo "After update:"
+          cat Formula/application.rb
+
+      - name: Commit and push changes
+        run: |
+          git config --global user.email "{REPLACE_WITH_GIT_EMAIL}"
+          git config --global user.name "{REPLACE_WITH_GIT_USERNAME}"
+          git config --unset core.autocrlf
+          git remote set-url origin https://{REPLACE_WITH_GITHUB_USERNAME}:$GH_TOKEN@github.com/{REPLACE_WITH_GITHUB_USERNAME}/{REPLACE_WITH_TAP_REPO}.git
+          git add -A
+          git status
+          git commit -m "Update {REPLACE_WITH_APP_NAME} to version $VERSION"
+          git push https://{REPLACE_WITH_GITHUB_USERNAME}:$GH_TOKEN@github.com/{REPLACE_WITH_GITHUB_USERNAME}/{REPLACE_WITH_TAP_REPO}.git
+
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
